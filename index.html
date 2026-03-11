@@ -220,11 +220,15 @@ body{min-height:-webkit-fill-available}
       </div>
       <div class="shot-row">
         <div class="shot-digs">
-          <button class="fplus" onclick="handleFoulTap(1)">+1</button>
+          <button class="fplus"
+            ontouchstart="foulPressStart(1,event)" ontouchend="foulPressEnd(1,event)" ontouchcancel="foulPressCancel()"
+            onmousedown="foulPressStart(1,event)" onmouseup="foulPressEnd(1,event)" onmouseleave="foulPressCancel()">+1</button>
           <div class="sd t1" id="fd1" onclick="handleFoulTap(1)">0</div>
           <div class="ssep">x</div>
           <div class="sd t2" id="fd2" onclick="handleFoulTap(2)">0</div>
-          <button class="fplus" onclick="handleFoulTap(2)">+1</button>
+          <button class="fplus"
+            ontouchstart="foulPressStart(2,event)" ontouchend="foulPressEnd(2,event)" ontouchcancel="foulPressCancel()"
+            onmousedown="foulPressStart(2,event)" onmouseup="foulPressEnd(2,event)" onmouseleave="foulPressCancel()">+1</button>
         </div>
       </div>
     </div>
@@ -252,6 +256,9 @@ body{min-height:-webkit-fill-available}
     </div>
     <div class="mtrack" id="mtrack3" onclick="playTrack('M_av9u4Bf0w','NBA Arena',3)">
       <span class="mico">🎵</span><span class="mlbl">NBA Arena</span>
+    </div>
+    <div class="mtrack" id="mtrack4" onclick="playTrack('9jK-NcRmVtw','Eye of Tiger',4)">
+      <span class="mico">🎵</span><span class="mlbl">Eye of Tiger</span>
     </div>
     <div class="mstop" onclick="stopMusic()">⏹ Stop</div>
   </div>
@@ -706,7 +713,7 @@ function sendBravo(){
   db.ref('bravo').set({ts:Date.now(),active:true});
   const b=document.querySelector('.bravo-ico');
   b.style.transform='scale(1.3)';b.textContent='🎊';
-  setTimeout(()=>{b.style.transform='';b.textContent='🎉';db.ref('bravo').set({ts:Date.now(),active:false});},30000);
+  setTimeout(()=>{b.style.transform='';b.textContent='🎉';db.ref('bravo').set({ts:Date.now(),active:false});},5000);
 }
 
 let camStream=null;
@@ -822,13 +829,45 @@ renderAll();
 let currentTrack = 0;
 function playTrack(ytId, name, num) {
   currentTrack = num;
-  [1,2,3].forEach(i => document.getElementById('mtrack'+i).classList.toggle('playing', i===num));
+  [1,2,3,4].forEach(i => document.getElementById('mtrack'+i).classList.toggle('playing', i===num));
   db.ref('music').set({ytId, name, ts: Date.now(), active: true});
 }
 function stopMusic() {
   currentTrack = 0;
-  [1,2,3].forEach(i => document.getElementById('mtrack'+i).classList.remove('playing'));
+  [1,2,3,4].forEach(i => document.getElementById('mtrack'+i).classList.remove('playing'));
   db.ref('music').set({ytId: '', ts: Date.now(), active: false});
+}
+
+// ── Long-Press Foul Buzzer ──
+let _foulTimer = null;
+let _foulTriggered = false;
+
+function foulPressStart(t, e) {
+  e.preventDefault();
+  _foulTriggered = false;
+  _foulTimer = setTimeout(() => {
+    _foulTriggered = true;
+    playBuzzer();
+    // visual flash on the button
+    const btn = e.currentTarget;
+    btn.style.background = '#ff8800';
+    btn.style.transform = 'scale(1.15)';
+    setTimeout(() => { btn.style.background = ''; btn.style.transform = ''; }, 350);
+  }, 600);
+}
+function foulPressEnd(t, e) {
+  e.preventDefault();
+  clearTimeout(_foulTimer);
+  _foulTimer = null;
+  if (!_foulTriggered) {
+    handleFoulTap(t);
+  }
+  _foulTriggered = false;
+}
+function foulPressCancel() {
+  clearTimeout(_foulTimer);
+  _foulTimer = null;
+  _foulTriggered = false;
 }
 
 // ── صفارة ملعب مركبة ──
