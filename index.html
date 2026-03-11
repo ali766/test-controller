@@ -257,7 +257,7 @@ body{min-height:-webkit-fill-available}
     <div class="mtrack" id="mtrack3" onclick="playTrack('M_av9u4Bf0w','NBA Arena',3)">
       <span class="mico">🎵</span><span class="mlbl">NBA Arena</span>
     </div>
-    <div class="mtrack" id="mtrack4" onclick="playTrack('__local_wewill__','We Will Rock You',4)">
+    <div class="mtrack" id="mtrack4" onclick="playMp3Track('we-will.mp3','We Will Rock You',4)">
       <span class="mico">🎵</span><span class="mlbl">We Will Rock You</span>
     </div>
     <div class="mstop" onclick="stopMusic()">⏹ Stop</div>
@@ -832,10 +832,15 @@ function playTrack(ytId, name, num) {
   [1,2,3,4].forEach(i => document.getElementById('mtrack'+i).classList.toggle('playing', i===num));
   db.ref('music').set({ytId, name, ts: Date.now(), active: true});
 }
+function playMp3Track(mp3, name, num) {
+  currentTrack = num;
+  [1,2,3,4].forEach(i => document.getElementById('mtrack'+i).classList.toggle('playing', i===num));
+  db.ref('music').set({mp3, name, ts: Date.now(), active: true});
+}
 function stopMusic() {
   currentTrack = 0;
   [1,2,3,4].forEach(i => document.getElementById('mtrack'+i).classList.remove('playing'));
-  db.ref('music').set({ytId: '', ts: Date.now(), active: false});
+  db.ref('music').set({ytId: '', mp3: '', ts: Date.now(), active: false});
 }
 
 // ── Long-Press Foul Buzzer ──
