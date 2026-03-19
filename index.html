@@ -12,7 +12,7 @@
   var manifest={
     name:"Basketball Scoreboard",short_name:"Basketball",
     start_url:".",display:"standalone",
-    background_color:"#000000",theme_color:"#000000",orientation:"any",
+    background_color:"#000000",theme_color:"#000000",orientation:"portrait",
     icons:[
       {src:"/wolves-icon.png",sizes:"192x192",type:"image/png",purpose:"any maskable"},
       {src:"/wolves-icon.png",sizes:"512x512",type:"image/png",purpose:"any maskable"}
@@ -478,6 +478,10 @@ document.addEventListener("visibilitychange",()=>{
       _hiddenAt=0;renderAll();push(true);
     }
     wl();
+// Lock screen to portrait
+if(screen.orientation && screen.orientation.lock){
+  screen.orientation.lock("portrait").catch(function(){});
+}
   }
 });
 async function wl(){if("wakeLock" in navigator){try{await navigator.wakeLock.request("screen");}catch(e){}}}
