@@ -421,12 +421,14 @@ let sc1=S.sc1??0,sc2=S.sc2??0,f1=S.f1??0,f2=S.f2??0,dt1=S.dt1??0,dt2=S.dt2??0;
 let qtr=S.qtr??1,tn1=S.tn1??"Team 1",tn2=S.tn2??"Team 2";
 let mainSec=S.mainSec??QD,shot=S.shot??24,shotMs=S.shotMs??0;
 let prev1=sc1,prev2=sc2,editingT=0;
-let mainRunning=false,shotRunning=false,mainTick=null,shotTick=null;
+let mainRunning=false,shotRunning=false;
 let quickEdit=false;
 let foulArrow=S.foulArrow??0;
 let _mainStartServerTime=null,_mainStartDuration=0,_shotStartServerTime=null,_shotStartDurationMs=0;
-let _mainWallStart=0,_mainSecAtStart=0;
-let _shotWallStart=0,_shotMsAtStart=0;
+// Unified clock
+let clockRunning=false;
+let _wallStart=0,_mainSecAtStart=0,_shotMsAtStart=0,_shotStartInt=0;
+let _unifiedRAF=null;
 function save(){try{localStorage.setItem("bb",JSON.stringify({sc1,sc2,f1,f2,dt1,dt2,qtr,tn1,tn2,mainSec,shot,shotMs,foulArrow}))}catch(e){}}
 let fbThrottle=null;
 function push(immediate){if(immediate){_doPush();}else{if(fbThrottle)return;fbThrottle=setTimeout(()=>{fbThrottle=null;_doPush();},200);}}
@@ -449,75 +451,101 @@ function renderAll(){
 }
 function rMain(){const m=Math.floor(mainSec/60),s=mainSec%60;document.getElementById("mainClk").textContent=String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");}
 function rShot(){const el=document.getElementById("shotTop");const d=Math.floor(shotMs/100);el.textContent=String(shot).padStart(2,"0")+"."+d;el.className="shot-top"+(shotRunning&&shot>=5?" run":shotRunning&&shot<5?" danger":"")+(quickEdit?" editable":"");}
-function toggleMainClock(){if(mainRunning)stopAll();else startAll();}
+function toggleMainClock(){if(clockRunning)stopAll();else startAll();}
+
 function startAll(){
-  // If shot clock is at 0, auto-reset to 24 before starting
+  if(clockRunning)return;
   if(shot<=0&&shotMs<=0){shot=24;shotMs=0;}
-  // ONE shared wall-clock timestamp → both clocks start from exact same moment
-  const wallNow=Date.now();
-  startMain(wallNow);
-  startShot(wallNow);
-  document.getElementById("playBtn").textContent="\u23F8";
-}
-function stopAll(){stopMain();stopShot();document.getElementById("playBtn").textContent="\u25B6\uFE0F";push(true);}
-
-function startMain(wallNow){
-  if(mainRunning)return;
-  mainRunning=true;
-  _mainWallStart=wallNow||Date.now();
+  clockRunning=true;mainRunning=true;shotRunning=true;
+  _wallStart=Date.now();
   _mainSecAtStart=mainSec;
+  _shotMsAtStart=shot*1000+shotMs;
+  _shotStartInt=shot; // integer seconds at start – used to sync main clock
   _mainStartServerTime=serverNow();_mainStartDuration=mainSec;
+  _shotStartServerTime=serverNow();_shotStartDurationMs=_shotMsAtStart;
+  document.getElementById("playBtn").textContent="⏸";
   push(true);
-  // 100ms interval same as shot clock – use ceiling so both clocks decrement at same moment
-  mainTick=setInterval(()=>{
-    const elapsedMs=Date.now()-_mainWallStart;
-    // ceiling: show the second JUST before it completes (matches shot clock feel)
-    mainSec=Math.max(0,_mainSecAtStart-Math.floor(elapsedMs/1000));
-    rMain();
-    if(mainSec<=0){stopAll();save();}
-  },100);
+  _tick();
 }
 
-function stopMain(){
-  if(!mainRunning&&mainTick===null)return;
-  if(mainRunning&&_mainWallStart>0){
-    const elapsedMs=Date.now()-_mainWallStart;
-    mainSec=Math.max(0,_mainSecAtStart-Math.floor(elapsedMs/1000));
+function _tick(){
+  if(!clockRunning)return;
+  const elapsedMs=Date.now()-_wallStart;
+  const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+  const shotCurrentInt=Math.floor(shotTotal/1000);
+
+  // Main clock: decrement exactly when shot clock integer decrements
+  // _shotStartInt - shotCurrentInt = how many whole seconds have elapsed on shot
+  const newMainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+  if(newMainSec!==mainSec){mainSec=newMainSec;rMain();}
+
+  // Shot clock – tenths precision
+  const newShotMs=shotTotal%1000;
+  if(shotCurrentInt!==shot||Math.floor(newShotMs/100)!==Math.floor(shotMs/100)){
+    shot=shotCurrentInt;shotMs=newShotMs;rShot();
   }
-  mainRunning=false;clearInterval(mainTick);mainTick=null;
-  _mainStartServerTime=null;_mainStartDuration=0;_mainWallStart=0;
-  save();
+
+  // Shot clock buzzer
+  if(shotTotal<=0&&shotRunning){
+    shot=0;shotMs=0;rShot();shotRunning=false;
+    _shotStartServerTime=null;_shotStartDurationMs=0;
+    playBuzzer();push(true);
+  }
+  // Main clock end
+  if(mainSec<=0){stopAll();save();return;}
+
+  _unifiedRAF=requestAnimationFrame(_tick);
+}
+
+function stopAll(){
+  if(_unifiedRAF){cancelAnimationFrame(_unifiedRAF);_unifiedRAF=null;}
+  if(_wallStart>0){
+    const elapsedMs=Date.now()-_wallStart;
+    const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+    const shotCurrentInt=Math.floor(shotTotal/1000);
+    mainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+    shot=shotCurrentInt;shotMs=shotTotal%1000;
+  }
+  clockRunning=false;mainRunning=false;shotRunning=false;
+  _wallStart=0;_mainStartServerTime=null;_shotStartServerTime=null;
+  document.getElementById("playBtn").textContent="▶️";
+  rMain();rShot();save();push(true);
+}
+
+function startMain(){}
+function stopMain(){stopAll();}
+function startShot(){}
+function stopShot(){
+  if(!shotRunning)return;
+  if(_wallStart>0){
+    const elapsedMs=Date.now()-_wallStart;
+    const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+    shot=Math.floor(shotTotal/1000);shotMs=shotTotal%1000;
+  }
+  shotRunning=false;
+  _shotStartServerTime=null;_shotStartDurationMs=0;
+  rShot();save();
 }
 
 function resetQtrTimer(){stopAll();mainSec=QD;shot=24;shotMs=0;renderAll();save();push(true);}
-
-function startShot(wallNow){
-  if(shotRunning)return;if(shot<=0&&shotMs<=0)return;
-  shotRunning=true;
-  _shotWallStart=wallNow||Date.now();
-  _shotMsAtStart=shot*1000+shotMs;
-  _shotStartServerTime=serverNow();_shotStartDurationMs=_shotMsAtStart;
-  push(true);rShot();
-  // Compute from absolute wall start each tick – no accumulated delta drift
-  shotTick=setInterval(()=>{
-    const total=Math.max(0,_shotMsAtStart-(Date.now()-_shotWallStart));
-    if(total<=0){shot=0;shotMs=0;rShot();playBuzzer();stopShot();push(true);return;}
-    shot=Math.floor(total/1000);shotMs=total%1000;rShot();
-  },100);
-}
-
-function stopShot(){
-  if(!shotRunning&&shotTick===null)return;
-  // Snapshot exact remaining time
-  if(shotRunning&&_shotWallStart>0){
-    const total=Math.max(0,_shotMsAtStart-(Date.now()-_shotWallStart));
-    shot=Math.floor(total/1000);shotMs=total%1000;
+function setShotClock(val){
+  if(clockRunning){
+    // Snapshot current mainSec before re-anchoring
+    const elapsedMs=Date.now()-_wallStart;
+    const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+    const shotCurrentInt=Math.floor(shotTotal/1000);
+    mainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+    // Re-anchor both clocks from NOW
+    _mainSecAtStart=mainSec;
+    _wallStart=Date.now();
+    _shotMsAtStart=val*1000;
+    _shotStartInt=val;
+    shotRunning=true;
+    _shotStartServerTime=serverNow();_shotStartDurationMs=val*1000;
   }
-  shotRunning=false;clearInterval(shotTick);shotTick=null;
-  _shotStartServerTime=null;_shotStartDurationMs=0;_shotWallStart=0;
-  rShot();save();
+  shot=val;shotMs=0;
+  rShot();save();push(true);
 }
-function setShotClock(val){stopShot();shot=val;shotMs=0;rShot();save();push(true);}
 function addScore(t,pts){if(t===1){prev1=sc1;sc1+=pts;}else{prev2=sc2;sc2+=pts;}renderAll();save();push(true);}
 function undoScore(){sc1=prev1;sc2=prev2;renderAll();save();push(true);}
 function toggleFoulArrow(t){foulArrow=foulArrow===t?0:t;renderAll();save();push(true);}
@@ -552,7 +580,12 @@ function refreshQuickEditUI(){
   document.getElementById("editToggleBtn").classList.toggle("edit-active",quickEdit);
 }
 function handleMainClockTap(){if(!quickEdit)return;openTimeM();}
-function handleShotTap(){if(quickEdit){openShotM();return;}if(shotRunning)stopShot();else startShot();push(true);}
+function handleShotTap(){
+  if(quickEdit){openShotM();return;}
+  // In unified loop: shot-only toggle not supported separately, just toggle all
+  if(clockRunning)stopAll();else startAll();
+  push(true);
+}
 function handleQuarterTap(){if(!quickEdit)return;openQtrM();}
 function handleScoreTap(t){if(!quickEdit)return;editScore(t);}
 
@@ -823,23 +856,11 @@ function savePhotoToPhone(){if(_currentPhotoUrl){const a=document.createElement(
 function confirmDeletePhoto(){db.ref("winner_photo").update({active:false,photo:""});document.getElementById("clearBtn").classList.remove("visible");closePhotoActionM();}
 db.ref("winner_photo").on("value",snap=>{const d=snap.val();_currentPhotoUrl=(d&&d.photo)?d.photo:"";document.getElementById("clearBtn").classList.toggle("visible",!!(d&&d.active&&d.photo));});
 document.addEventListener("visibilitychange",()=>{
-  if(document.visibilityState==="hidden"){
-    // Nothing to do – wall-clock refs remain valid while hidden
-  } else {
-    // Page came back – wall clock already handled gap automatically.
-    // Just re-render and push the corrected values.
-    if(mainRunning){
-      const elapsedMs=Date.now()-_mainWallStart;
-      mainSec=Math.max(0,_mainSecAtStart-Math.floor(elapsedMs/1000));
-      if(mainSec<=0){stopAll();save();}
-      else{_mainStartServerTime=serverNow();_mainStartDuration=mainSec;}
-    }
-    if(shotRunning){
-      const total=Math.max(0,_shotMsAtStart-(Date.now()-_shotWallStart));
-      if(total<=0){shot=0;shotMs=0;stopShot();push(true);}
-      else{shot=Math.floor(total/1000);shotMs=total%1000;_shotStartServerTime=serverNow();_shotStartDurationMs=shot*1000+shotMs;}
-    }
-    renderAll();push(true);
+  if(document.visibilityState!=="hidden"&&clockRunning){
+    // Wall clock already tracked the gap — just restart the RAF loop
+    if(_unifiedRAF){cancelAnimationFrame(_unifiedRAF);_unifiedRAF=null;}
+    _tick();
+    push(true);
     wl();
   }
 });
