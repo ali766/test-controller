@@ -444,7 +444,9 @@ function renderAll(){
   document.getElementById("qtrLbl").textContent=QN[(qtr-1)%4];
   document.getElementById("fn1").textContent=f1;document.getElementById("fn2").textContent=f2;
   document.getElementById("fd1").textContent=f1;document.getElementById("fd2").textContent=f2;
-  ["a","b","c","d"].forEach((l,i)=>{document.getElementById("d1"+l).classList.toggle("on",i<dt1);document.getElementById("d2"+l).classList.toggle("on",i<dt2);});
+  const disp1=f1%4===0&&f1>0?4:f1%4;
+  const disp2=f2%4===0&&f2>0?4:f2%4;
+  ["a","b","c","d"].forEach((l,i)=>{document.getElementById("d1"+l).classList.toggle("on",i<disp1);document.getElementById("d2"+l).classList.toggle("on",i<disp2);});
   document.getElementById("arrowL").classList.toggle("active",foulArrow===1);
   document.getElementById("arrowR").classList.toggle("active",foulArrow===2);
   rMain();rShot();refreshQuickEditUI();
@@ -579,7 +581,7 @@ function saveFoul(){
   closeFoulM();renderAll();save();push(true);
 }
 function closeFoulM(){document.getElementById("foulM").classList.remove("show");}
-function cycleDot(t){if(t===1)dt1=dt1>=4?0:dt1+1;else dt2=dt2>=4?0:dt2+1;renderAll();save();}
+function cycleDot(t){handleFoulTap(t);}
 function confirmReset(){document.getElementById("confM").classList.add("show");}
 function doReset(){document.getElementById("confM").classList.remove("show");sc1=sc2=f1=f2=dt1=dt2=0;prev1=prev2=0;qtr=1;foulArrow=0;stopAll();mainSec=QD;shot=24;shotMs=0;renderAll();save();push(true);}
 function toggleQuickEdit(){quickEdit=!quickEdit;refreshQuickEditUI();}
