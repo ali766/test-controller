@@ -471,29 +471,36 @@ function startAll(){
 function _tick(){
   if(!clockRunning)return;
   const elapsedMs=Date.now()-_wallStart;
-  const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
-  const shotCurrentInt=Math.floor(shotTotal/1000);
+  let newMainSec;
 
-  // Main clock: decrement exactly when shot clock integer decrements
-  // _shotStartInt - shotCurrentInt = how many whole seconds have elapsed on shot
-  const newMainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+  if(shotRunning){
+    // ── Shot still running: main syncs with shot integer ──
+    const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+    const shotCurrentInt=Math.floor(shotTotal/1000);
+    newMainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+
+    // Update shot display
+    const newShotMs=shotTotal%1000;
+    if(shotCurrentInt!==shot||Math.floor(newShotMs/100)!==Math.floor(shotMs/100)){
+      shot=shotCurrentInt;shotMs=newShotMs;rShot();
+    }
+
+    // Shot buzzer
+    if(shotTotal<=0){
+      shot=0;shotMs=0;rShot();shotRunning=false;
+      // Re-anchor main to wall clock from this exact moment
+      _mainSecAtStart=newMainSec;
+      _wallStart=Date.now();
+      _shotStartServerTime=null;_shotStartDurationMs=0;
+      playBuzzer();push(true);
+    }
+  } else {
+    // ── Shot done: main runs on pure wall clock ──
+    newMainSec=Math.max(0,_mainSecAtStart-Math.floor(elapsedMs/1000));
+  }
+
   if(newMainSec!==mainSec){mainSec=newMainSec;rMain();}
-
-  // Shot clock – tenths precision
-  const newShotMs=shotTotal%1000;
-  if(shotCurrentInt!==shot||Math.floor(newShotMs/100)!==Math.floor(shotMs/100)){
-    shot=shotCurrentInt;shotMs=newShotMs;rShot();
-  }
-
-  // Shot clock buzzer
-  if(shotTotal<=0&&shotRunning){
-    shot=0;shotMs=0;rShot();shotRunning=false;
-    _shotStartServerTime=null;_shotStartDurationMs=0;
-    playBuzzer();push(true);
-  }
-  // Main clock end
   if(mainSec<=0){stopAll();save();return;}
-
   _unifiedRAF=requestAnimationFrame(_tick);
 }
 
@@ -501,10 +508,15 @@ function stopAll(){
   if(_unifiedRAF){cancelAnimationFrame(_unifiedRAF);_unifiedRAF=null;}
   if(_wallStart>0){
     const elapsedMs=Date.now()-_wallStart;
-    const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
-    const shotCurrentInt=Math.floor(shotTotal/1000);
-    mainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
-    shot=shotCurrentInt;shotMs=shotTotal%1000;
+    if(shotRunning){
+      const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+      const shotCurrentInt=Math.floor(shotTotal/1000);
+      mainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+      shot=shotCurrentInt;shotMs=shotTotal%1000;
+    } else {
+      // Shot already done – main uses wall clock
+      mainSec=Math.max(0,_mainSecAtStart-Math.floor(elapsedMs/1000));
+    }
   }
   clockRunning=false;mainRunning=false;shotRunning=false;
   _wallStart=0;_mainStartServerTime=null;_shotStartServerTime=null;
@@ -530,12 +542,16 @@ function stopShot(){
 function resetQtrTimer(){stopAll();mainSec=QD;shot=24;shotMs=0;renderAll();save();push(true);}
 function setShotClock(val){
   if(clockRunning){
-    // Snapshot current mainSec before re-anchoring
     const elapsedMs=Date.now()-_wallStart;
-    const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
-    const shotCurrentInt=Math.floor(shotTotal/1000);
-    mainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
-    // Re-anchor both clocks from NOW
+    // Snapshot current mainSec (works in both shot-running and shot-done mode)
+    if(shotRunning){
+      const shotTotal=Math.max(0,_shotMsAtStart-elapsedMs);
+      const shotCurrentInt=Math.floor(shotTotal/1000);
+      mainSec=Math.max(0,_mainSecAtStart-(_shotStartInt-shotCurrentInt));
+    } else {
+      mainSec=Math.max(0,_mainSecAtStart-Math.floor(elapsedMs/1000));
+    }
+    // Re-anchor both from NOW with new shot value
     _mainSecAtStart=mainSec;
     _wallStart=Date.now();
     _shotMsAtStart=val*1000;
