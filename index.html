@@ -267,8 +267,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:"Ra
         <button class="sbtn" onclick="addScore(2,3)">+3</button>
       </div>
       <div class="rib">
-        <button class="ico" onclick="setShotClock(24)">🔔</button>
         <button class="ico" onclick="undoScore()">↩</button>
+        <button class="ico" id="wolfBtn" style="background:#333;font-size:22px" onclick="toggleWolfAnim()">🐺</button>
       </div>
     </div>
   </div>
@@ -904,6 +904,15 @@ let _foulNumTimer=null,_foulNumTriggered=false;
 function foulNumPressStart(t,e){e.preventDefault();_foulNumTriggered=false;_foulNumTimer=setTimeout(()=>{_foulNumTriggered=true;if(t===1)f1=0;else f2=0;renderAll();save();push(true);const el=document.getElementById("fd"+t);el.style.background="rgba(255,0,0,0.3)";setTimeout(()=>{el.style.background="";},350);},600);}
 function foulNumPressEnd(t,e){e.preventDefault();clearTimeout(_foulNumTimer);_foulNumTimer=null;if(!_foulNumTriggered){handleFoulTap(t);}_foulNumTriggered=false;}
 function foulNumPressCancel(){clearTimeout(_foulNumTimer);_foulNumTimer=null;_foulNumTriggered=false;}
+let _wolfActive=false;
+function toggleWolfAnim(){
+  _wolfActive=!_wolfActive;
+  db.ref("logoAnimation").set({active:_wolfActive,ts:Date.now()});
+  const b=document.getElementById("wolfBtn");
+  b.style.background=_wolfActive?"#ffcc00":"#333";
+  b.style.boxShadow=_wolfActive?"0 0 14px #ffcc0088":"none";
+}
+
 function playBuzzer(){
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
